@@ -28,6 +28,15 @@
         }
     </style>
 
+    
+</head>
+<body>
+    <h1>Mobile Scribe</h1>
+    <input type="email" id="email" placeholder="Enter email to send transcript">
+    <button id="recordButton">Start Recording</button>
+    <button id="sendButton">Send Transcript</button>
+    <div id="transcript"></div>
+
     <script>
         const recordButton = document.getElementById('recordButton');
         const sendButton = document.getElementById('sendButton');
@@ -88,14 +97,5 @@
             }
         });
     </script>
-</head>
-<body>
-    <h1>Mobile Scribe</h1>
-    <input type="email" id="email" placeholder="Enter email to send transcript">
-    <button id="recordButton">Start Recording</button>
-    <button id="sendButton">Send Transcript</button>
-    <div id="transcript"></div>
-
-    
 </body>
 </html>

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mobile Scribe</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 50px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin-top: 20px;
+        }
+        #transcript {
+            margin-top: 30px;
+            font-size: 18px;
+            color: #333;
+        }
+        input {
+            padding: 10px;
+            font-size: 16px;
+            margin-top: 20px;
+            width: 250px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Mobile Scribe</h1>
+    <input type="email" id="email" placeholder="Enter email to send transcript">
+    <button id="recordButton">Start Recording</button>
+    <button id="sendButton">Send Transcript</button>
+    <div id="transcript"></div>
+
+    <script>
+        const recordButton = document.getElementById('recordButton');
+        const sendButton = document.getElementById('sendButton');
+        const transcriptDiv = document.getElementById('transcript');
+        const emailInput = document.getElementById('email');
+        let isRecording = false;
+        let recognition;
+        let finalTranscript = '';
+
+        if ('webkitSpeechRecognition' in window) {
+            recognition = new webkitSpeechRecognition();
+        } else {
+            recognition = new SpeechRecognition();
+        }
+
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = 'en-US';
+
+        recognition.onresult = function(event) {
+            let interimTranscript = '';
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) {
+                    const speaker = event.results[i][0].transcript.includes('Speaker 1:') ? 'Speaker 1' : 'Speaker 2';
+                    finalTranscript += `${speaker}: ${event.results[i][0].transcript} `;
+                } else {
+                    interimTranscript += event.results[i][0].transcript;
+                }
+            }
+            transcriptDiv.innerHTML = finalTranscript + '<i>' + interimTranscript + '</i>';
+        };
+
+        recognition.onerror = function(event) {
+            console.error('Speech recognition error detected: ' + event.error);
+        };
+
+        recordButton.addEventListener('click', () => {
+            if (isRecording) {
+                recognition.stop();
+                recordButton.textContent = 'Start Recording';
+            } else {
+                recognition.start();
+                transcriptDiv.textContent = '';
+                finalTranscript = '';
+                recordButton.textContent = 'Stop Recording';
+            }
+            isRecording = !isRecording;
+        });
+
+        sendButton.addEventListener('click', () => {
+            const email = emailInput.value;
+            if (email && finalTranscript) {
+                // This example uses a mailto link for simplicity. In a real-world application, you would likely use an email sending service.
+                const mailtoLink = `mailto:${email}?subject=Transcription&body=${encodeURIComponent(finalTranscript)}`;
+                window.location.href = mailtoLink;
+            } else {
+                alert('Please enter a valid email and ensure there is a transcription to send.');
+            }
+        });
+    </script>
+</body>
+</html>

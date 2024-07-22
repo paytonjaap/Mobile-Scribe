@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Recorder and Transcriber</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 50px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin-top: 20px;
+        }
+        #transcript {
+            margin-top: 30px;
+            font-size: 18px;
+            color: #333;
+            white-space: pre-wrap;
+            text-align: left;
+        }
+        input[type="email"] {
+            padding: 10px;
+            font-size: 16px;
+            width: 300px;
+            margin-top: 20px;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/annyang/2.6.1/annyang.min.js"></script>
+</head>
+<body>
+    <h1>Audio Recorder and Transcriber</h1>
+    <input type="email" id="email" placeholder="Enter email to send transcript">
+    <button id="recordButton">Start Recording</button>
+    <button id="sendButton">Send Transcript</button>
+    <div id="transcript"></div>
+
+    <script>
+        const recordButton = document.getElementById('recordButton');
+        const sendButton = document.getElementById('sendButton');
+        const transcriptDiv = document.getElementById('transcript');
+        const emailInput = document.getElementById('email');
+        let isRecording = false;
+        let finalTranscript = '';
+        let speakerCounter = 1;
+
+        function updateTranscript(interimTranscript) {
+            transcriptDiv.innerHTML = finalTranscript + '<i>' + interimTranscript + '</i>';
+        }
+
+        if (annyang) {
+            annyang.addCallback('result', (phrases) => {
+                const transcript = phrases[0];
+                const speaker = `Speaker ${speakerCounter}: `;
+                finalTranscript += `${speaker}${transcript}\n`;
+                speakerCounter = speakerCounter === 1 ? 2 : 1;
+                updateTranscript('');
+            });
+
+            annyang.addCallback('resultNoMatch', () => {
+                console.log('No match found.');
+            });
+
+            annyang.addCallback('error', (error) => {
+                console.error('Speech recognition error detected: ', error);
+            });
+        }
+
+        recordButton.addEventListener('click', () => {
+            if (isRecording) {
+                annyang.abort();
+                recordButton.textContent = 'Start Recording';
+            } else {
+                finalTranscript = '';
+                transcriptDiv.textContent = '';
+                annyang.start({ continuous: true, autoRestart: true });
+                recordButton.textContent = 'Stop Recording';
+            }
+            isRecording = !isRecording;
+        });
+
+        sendButton.addEventListener('click', () => {
+            const email = emailInput.value;
+            if (email && finalTranscript) {
+                const mailtoLink = `mailto:${email}?subject=Transcription&body=${encodeURIComponent(finalTranscript)}`;
+                window.location.href = mailtoLink;
+            } else {
+                alert('Please enter a valid email and ensure there is a transcription to send.');
+            }
+        });
+    </script>
+</body>
+</html>

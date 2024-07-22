@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Recorder and Transcriber</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 50px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin-top: 20px;
+        }
+        #transcript {
+            margin-top: 30px;
+            font-size: 18px;
+            color: #333;
+            white-space: pre-wrap;
+            text-align: left;
+        }
+        input[type="email"] {
+            padding: 10px;
+            font-size: 16px;
+            width: 300px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Audio Recorder and Transcriber</h1>
+    <input type="email" id="email" placeholder="Enter email to send transcript">
+    <button id="recordButton">Start Recording</button>
+    <button id="sendButton">Send Transcript</button>
+    <div id="transcript"></div>
+
+    <script src="https://cdn.jsdelivr.net/gh/alphacep/vosk-browser/vosk-websocket.js"></script>
+    <script>
+        const recordButton = document.getElementById('recordButton');
+        const sendButton = document.getElementById('sendButton');
+        const transcriptDiv = document.getElementById('transcript');
+        const emailInput = document.getElementById('email');
+        let isRecording = false;
+        let finalTranscript = '';
+        let speakerCounter = 1;
+        let recorder, websocket;
+
+        function updateTranscript(interimTranscript) {
+            transcriptDiv.innerHTML = finalTranscript + '<i>' + interimTranscript + '</i>';
+        }
+
+        async function startRecording() {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            const audioContext = new AudioContext();
+            const input = audioContext.createMediaStreamSource(stream);
+            recorder = new Recorder(input);
+            recorder.record();
+
+            websocket = new WebSocket("wss://api.alphacephei.com/vosk");
+
+            websocket.onopen = () => {
+                console.log("WebSocket connection established");
+            };
+
+            websocket.onmessage = (event) => {
+                const result = JSON.parse(event.data);
+                if (result.text) {
+                    const speaker = `Speaker ${speakerCounter}: `;
+                    finalTranscript += `${speaker}${result.text}\n`;
+                    speakerCounter = speakerCounter === 1 ? 2 : 1;
+                    updateTranscript('');
+                }
+            };
+
+            websocket.onerror = (error) => {
+                console.error("WebSocket error: ", error);
+            };
+
+            websocket.onclose = () => {
+                console.log("WebSocket connection closed");
+            };
+
+            recorder.exportWAV((blob) => {
+                websocket.send(blob);
+            });
+        }
+
+        function stopRecording() {
+            recorder.stop();
+            recorder.clear();
+            websocket.close();
+        }
+
+        recordButton.addEventListener('click', () => {
+            if (isRecording) {
+                stopRecording();
+                recordButton.textContent = 'Start Recording';
+            } else {
+                startRecording();
+                transcriptDiv.textContent = '';
+                finalTranscript = '';
+                recordButton.textContent = 'Stop Recording';
+            }
+            isRecording = !isRecording;
+        });
+
+        sendButton.addEventListener('click', () => {
+            const email = emailInput.value;
+            if (email && finalTranscript) {
+                const mailtoLink = `mailto:${email}?subject=Transcription&body=${encodeURIComponent(finalTranscript)}`;
+                window.location.href = mailtoLink;
+            } else {
+                alert('Please enter a valid email and ensure there is a transcription to send.');
+            }
+        });
+    </script>
+</body>
+</html>

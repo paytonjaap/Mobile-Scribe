@@ -28,7 +28,11 @@
             width: 300px;
             margin-top: 20px;
         }
+        #audioContainer {
+            margin-top: 20px;
+        }
     </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/annyang/2.6.1/annyang.min.js"></script>
 </head>
 <body>
     <h1>Audio Recorder and Transcriber</h1>
@@ -36,99 +40,83 @@
     <button id="recordButton">Start Recording</button>
     <button id="sendButton">Send Transcript</button>
     <div id="transcript"></div>
-    <a id="downloadLink" style="display:none;">Download Audio File</a>
+    <div id="audioContainer"></div>
 
-    <script src="https://cdn.jsdelivr.net/gh/alphacep/vosk-browser/vosk-websocket.js"></script>
     <script>
         const recordButton = document.getElementById('recordButton');
         const sendButton = document.getElementById('sendButton');
         const transcriptDiv = document.getElementById('transcript');
         const emailInput = document.getElementById('email');
-        const downloadLink = document.getElementById('downloadLink');
+        const audioContainer = document.getElementById('audioContainer');
         let isRecording = false;
         let finalTranscript = '';
         let speakerCounter = 1;
-        let recorder, websocket, audioBlob;
-        let lastSpeakerEndTime = 0;
+        let mediaRecorder;
+        let audioChunks = [];
 
         function updateTranscript(interimTranscript) {
             transcriptDiv.innerHTML = finalTranscript + '<i>' + interimTranscript + '</i>';
         }
 
-        function handleResult(result) {
-            const now = Date.now();
-            if (now - lastSpeakerEndTime > 1000) {
+        if (annyang) {
+            annyang.addCallback('result', (phrases) => {
+                const transcript = phrases[0];
+                const speaker = `Speaker ${speakerCounter}: `;
+                finalTranscript += `${speaker}${transcript}\n`;
                 speakerCounter = speakerCounter === 1 ? 2 : 1;
-            }
-            lastSpeakerEndTime = now;
-
-            const speaker = `Speaker ${speakerCounter}: `;
-            finalTranscript += `${speaker}${result.text}\n`;
-            updateTranscript('');
-        }
-
-        async function startRecording() {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const AudioContext = window.AudioContext || window.webkitAudioContext;
-            const audioContext = new AudioContext();
-            const input = audioContext.createMediaStreamSource(stream);
-            recorder = new Recorder(input, { numChannels: 1 });
-            recorder.record();
-
-            websocket = new WebSocket("wss://api.alphacephei.com/vosk");
-
-            websocket.onopen = () => {
-                console.log("WebSocket connection established");
-            };
-
-            websocket.onmessage = (event) => {
-                const result = JSON.parse(event.data);
-                if (result.text) {
-                    handleResult(result);
-                }
-            };
-
-            websocket.onerror = (error) => {
-                console.error("WebSocket error: ", error);
-            };
-
-            websocket.onclose = () => {
-                console.log("WebSocket connection closed");
-            };
-
-            setInterval(() => {
-                if (recorder && websocket.readyState === WebSocket.OPEN) {
-                    recorder.exportWAV((blob) => {
-                        websocket.send(blob);
-                        recorder.clear();
-                    });
-                }
-            }, 1000);
-        }
-
-        function stopRecording() {
-            recorder.stop();
-            recorder.exportWAV((blob) => {
-                audioBlob = blob;
-                const url = URL.createObjectURL(blob);
-                downloadLink.href = url;
-                downloadLink.download = 'audio.wav';
-                downloadLink.style.display = 'block';
-                recorder.clear();
+                updateTranscript('');
             });
-            websocket.close();
+
+            annyang.addCallback('resultNoMatch', () => {
+                console.log('No match found.');
+            });
+
+            annyang.addCallback('error', (error) => {
+                console.error('Speech recognition error detected: ', error);
+            });
         }
 
-        recordButton.addEventListener('click', () => {
+        recordButton.addEventListener('click', async () => {
             if (isRecording) {
-                stopRecording();
+                mediaRecorder.stop();
+                annyang.abort();
                 recordButton.textContent = 'Start Recording';
             } else {
-                startRecording();
-                transcriptDiv.textContent = '';
                 finalTranscript = '';
-                downloadLink.style.display = 'none';
-                recordButton.textContent = 'Stop Recording';
+                transcriptDiv.textContent = '';
+                audioChunks = [];
+
+                if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(stream);
+
+                    mediaRecorder.ondataavailable = (event) => {
+                        audioChunks.push(event.data);
+                    };
+
+                    mediaRecorder.onstop = () => {
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                        const audioUrl = URL.createObjectURL(audioBlob);
+                        const audio = document.createElement('audio');
+                        const downloadLink = document.createElement('a');
+
+                        audio.src = audioUrl;
+                        audio.controls = true;
+                        downloadLink.href = audioUrl;
+                        downloadLink.download = 'recording.wav';
+                        downloadLink.textContent = 'Download Recording';
+
+                        audioContainer.innerHTML = '';
+                        audioContainer.appendChild(audio);
+                        audioContainer.appendChild(downloadLink);
+                    };
+
+                    mediaRecorder.start();
+                    annyang.start({ continuous: true, autoRestart: true });
+                    recordButton.textContent = 'Stop Recording';
+                } else {
+                    alert('Your browser does not support audio recording.');
+                }
             }
             isRecording = !isRecording;
         });
